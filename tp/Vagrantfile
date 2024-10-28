@@ -1,0 +1,69 @@
+# Install Kubernetes
+deploy_kubernetes = ENV['DEPLOY_KUBERNETES'] || false
+
+# Install CNI
+cni_plugin = ENV['CNI_PLUGIN'] || "cilium"
+
+#controlplanes 
+controlplane_ip = "192.168.56.10"
+
+#Nodes 
+numNodes = 2
+instances = []
+(1..numNodes).each do |n| 
+  instances.push({:name => "worker#{n}", :ip => "192.168.56.#{n+10}"})
+end
+
+#Cluster IP
+File.open("./hosts", 'w') { |file| 
+    file.write("#{controlplane_ip} controlplane controlplane.tp.elearning.rousseltm.fr\n")
+    instances.each do |i|
+        file.write("#{i[:ip]} #{i[:name]} #{i[:name]}.tp.elearning.rousseltm.fr\n")
+    end
+}
+
+
+Vagrant.configure("2") do |config|
+
+    # Configuration DNS pour chaque machine
+    config.vm.provision "shell", path: "scripts/common.sh"
+
+    config.vm.boot_timeout = 1200
+    
+    #Création du controlplane
+    config.vm.define "controlplane" do |controlplane|
+        controlplane.vm.box = "bento/ubuntu-24.04"
+        controlplane.vm.hostname = "controlplane"
+        controlplane.vm.network "private_network", ip: "#{controlplane_ip}"
+        if File.file?("./hosts") 
+            controlplane.vm.provision "file", source: "hosts", destination: "/tmp/hosts"
+            controlplane.vm.provision "shell", inline: "cat /tmp/hosts >> /etc/hosts", privileged: true
+        end 
+        if deploy_kubernetes 
+            controlplane.vm.provision "shell", path: "scripts/controlplane.sh"
+        end
+    end 
+
+    #Création des Nodes 
+    instances.each do |instance| 
+        config.vm.define instance[:name] do |node|
+            node.vm.box = "bento/ubuntu-24.04"
+            node.vm.hostname = instance[:name]
+            node.vm.network "private_network", ip: "#{instance[:ip]}"
+            if File.file?("./hosts") 
+                node.vm.provision "file", source: "hosts", destination: "/tmp/hosts"
+                node.vm.provision "shell", inline: "cat /tmp/hosts >> /etc/hosts", privileged: true
+            end 
+            if deploy_kubernetes
+                node.vm.provision "shell", path: "scripts/node.sh"
+            end
+        end 
+    end
+
+    config.vm.provider "virtualbox" do |v|
+        v.customize ["modifyvm", :id, "--groups", "/Kubernetes by RousselTM"]
+        #v.memory = 1024
+        #v.cpus = 1
+    end
+
+end
