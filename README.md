@@ -1,2 +1,2 @@
-# docker-formation
-Repo de formation Docker
+# kubernetes-formation
+Repo de formation sur Kubernetes
