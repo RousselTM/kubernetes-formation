@@ -5,6 +5,7 @@ nodes:
 - role: control-plane
 - role: worker
 - role: worker
+  #image: kindest/node:v1.31.0
 #networking:
 #   disableDefaultCNI: true
 #   kubeProxyMode: none
